@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\MatchSchedule;
 use App\Models\Team;
 use App\Models\Tournament;
+use App\Services\TournamentBracketGenerator;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 
 class AdminScheduleController extends Controller
 {
     // Menampilkan semua jadwal pertandingan
-    public function index()
+    public function index(): View
     {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
@@ -20,13 +24,24 @@ class AdminScheduleController extends Controller
             'tournament',
             'teamA',
             'teamB',
-        ])->latest()->get();
+        ])
+            ->orderBy('tournament_id')
+            ->orderBy('id')
+            ->get();
 
-        return view('admin.schedules', compact('schedules'));
+        $tournaments = Tournament::query()
+            ->withCount([
+                'teams as approved_teams_count' => fn ($query) => $query->where('status', 'approved'),
+                'matchSchedules',
+            ])
+            ->orderBy('name')
+            ->get();
+
+        return view('admin.schedules', compact('schedules', 'tournaments'));
     }
 
     // Menampilkan form tambah jadwal
-    public function create()
+    public function create(): View
     {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
@@ -43,7 +58,7 @@ class AdminScheduleController extends Controller
     }
 
     // Menyimpan jadwal pertandingan
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
@@ -53,9 +68,9 @@ class AdminScheduleController extends Controller
             'tournament_id' => 'required|exists:tournaments,id',
             'team_a_id' => 'required|exists:teams,id|different:team_b_id',
             'team_b_id' => 'required|exists:teams,id',
-            'match_date' => 'nullable|date',
+            'match_date' => 'nullable|date_format:Y-m-d',
             'match_time' => 'nullable|date_format:H:i',
-            'round' => 'required|in:Upper Semi Final,Upper Final,Lower Round,Lower Final,Grand Final',
+            'round' => 'required|in:Round of 64,Round of 32,Round of 16,Quarterfinal,Semifinal,Final',
         ]);
 
         $teamA = Team::findOrFail($validated['team_a_id']);
@@ -97,9 +112,32 @@ class AdminScheduleController extends Controller
             ->with('success', 'Jadwal pertandingan berhasil ditambahkan!');
     }
 
-    // Mengubah status pertandingan
-    public function updateStatus($id, $status)
+    public function generate(Request $request, TournamentBracketGenerator $generator): RedirectResponse
     {
+        if (auth()->user()->role !== 'admin') {
+            abort(403, 'Akses khusus admin.');
+        }
+
+        $validated = $request->validate([
+            'tournament_id' => 'required|exists:tournaments,id',
+            'replace_existing' => 'nullable|boolean',
+        ]);
+        $tournament = Tournament::findOrFail($validated['tournament_id']);
+        $matchCount = $generator->generate(
+            $tournament,
+            (bool) ($validated['replace_existing'] ?? false)
+        );
+
+        return redirect('/admin/schedules')
+            ->with('success', "Bracket single elimination berhasil dibuat otomatis ({$matchCount} slot pertandingan).");
+    }
+
+    // Mengubah status pertandingan
+    public function updateStatus(
+        int $id,
+        string $status,
+        TournamentBracketGenerator $generator
+    ): RedirectResponse {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
         }
@@ -110,33 +148,98 @@ class AdminScheduleController extends Controller
 
         $schedule = MatchSchedule::findOrFail($id);
 
-        $schedule->status = $status;
-        $schedule->save();
+        if ($status === 'finished' && ! $schedule->result) {
+            return back()->withErrors([
+                'result' => 'Masukkan hasil pertandingan sebelum mengubah status menjadi selesai.',
+            ]);
+        }
+
+        DB::transaction(function () use ($schedule, $status, $generator): void {
+            $schedule->status = $status;
+
+            if ($status !== 'finished') {
+                $schedule->result = null;
+            }
+
+            $schedule->save();
+
+            if ($schedule->is_bracket_generated) {
+                $generator->synchronize($schedule->tournament);
+            }
+        });
 
         return redirect('/admin/schedules')
             ->with('success', 'Status pertandingan berhasil diperbarui!');
     }
 
-    public function updateResult(Request $request, $id)
+    public function updateResult(
+        Request $request,
+        int $id,
+        TournamentBracketGenerator $generator
+    ): RedirectResponse {
+        if (auth()->user()->role !== 'admin') {
+            abort(403, 'Akses khusus admin.');
+        }
+
+        $validated = $request->validate([
+            'result' => ['required', 'regex:/^\d+-\d+$/'],
+        ]);
+
+        $schedule = MatchSchedule::findOrFail($id);
+
+        if (! $schedule->team_a_id || ! $schedule->team_b_id) {
+            return back()->withErrors([
+                'result' => 'Hasil hanya dapat dicatat setelah kedua tim ditentukan.',
+            ]);
+        }
+
+        [$scoreA, $scoreB] = array_map('intval', explode('-', $validated['result']));
+
+        if ($scoreA === $scoreB) {
+            return back()->withErrors([
+                'result' => 'Skor pertandingan tidak boleh seri.',
+            ]);
+        }
+
+        DB::transaction(function () use ($schedule, $validated, $generator): void {
+            $schedule->result = $validated['result'];
+            $schedule->status = 'finished';
+            $schedule->save();
+
+            if ($schedule->is_bracket_generated) {
+                $generator->synchronize($schedule->tournament);
+            }
+        });
+
+        return redirect('/admin/schedules')
+            ->with('success', 'Hasil pertandingan disimpan dan bracket diperbarui otomatis!');
+    }
+
+    public function updateSchedule(Request $request, int $id): RedirectResponse
     {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
         }
 
         $validated = $request->validate([
-            'result' => 'required|string|max:30',
+            'match_date' => 'nullable|date_format:Y-m-d',
+            'match_time' => 'nullable|date_format:H:i',
         ]);
-
         $schedule = MatchSchedule::findOrFail($id);
 
-        $schedule->result = $validated['result'];
-        $schedule->save();
+        if (in_array($schedule->result, ['BYE', 'SKIPPED'], true)) {
+            return back()->withErrors([
+                'schedule' => 'Pertandingan otomatis atau yang tidak diperlukan tidak dapat dijadwalkan.',
+            ]);
+        }
+
+        $schedule->update($validated);
 
         return redirect('/admin/schedules')
-            ->with('success', 'Hasil pertandingan berhasil disimpan!');
+            ->with('success', 'Tanggal dan waktu pertandingan berhasil diperbarui.');
     }
 
-    public function resetAll()
+    public function resetAll(): RedirectResponse
     {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
@@ -149,13 +252,20 @@ class AdminScheduleController extends Controller
     }
 
     // Menghapus jadwal pertandingan
-    public function destroy($id)
+    public function destroy(int $id): RedirectResponse
     {
         if (auth()->user()->role !== 'admin') {
             abort(403, 'Akses khusus admin.');
         }
 
         $schedule = MatchSchedule::findOrFail($id);
+
+        if ($schedule->is_bracket_generated) {
+            return back()->withErrors([
+                'schedule' => 'Pertandingan bracket tidak dapat dihapus satu per satu. Gunakan reset jadwal untuk menghapus seluruh bracket.',
+            ]);
+        }
+
         $schedule->delete();
 
         return redirect('/admin/schedules')

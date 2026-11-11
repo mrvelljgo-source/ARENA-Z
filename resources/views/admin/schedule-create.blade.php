@@ -211,20 +211,23 @@
                     <label>Babak Pertandingan</label>
                     <select name="round" required>
                         <option value="">-- Pilih Babak --</option>
-                        <option value="Upper Semi Final" {{ old('round') == 'Upper Semi Final' ? 'selected' : '' }}>
-                            Upper Semi Final
+                        <option value="Round of 64" {{ old('round') == 'Round of 64' ? 'selected' : '' }}>
+                            Round of 64
                         </option>
-                        <option value="Upper Final" {{ old('round') == 'Upper Final' ? 'selected' : '' }}>
-                            Upper Final
+                        <option value="Round of 32" {{ old('round') == 'Round of 32' ? 'selected' : '' }}>
+                            Round of 32
                         </option>
-                        <option value="Lower Round" {{ old('round') == 'Lower Round' ? 'selected' : '' }}>
-                            Lower Round
+                        <option value="Round of 16" {{ old('round') == 'Round of 16' ? 'selected' : '' }}>
+                            Round of 16
                         </option>
-                        <option value="Lower Final" {{ old('round') == 'Lower Final' ? 'selected' : '' }}>
-                            Lower Final
+                        <option value="Quarterfinal" {{ old('round') == 'Quarterfinal' ? 'selected' : '' }}>
+                            Quarterfinal
                         </option>
-                        <option value="Grand Final" {{ old('round') == 'Grand Final' ? 'selected' : '' }}>
-                            Grand Final
+                        <option value="Semifinal" {{ old('round') == 'Semifinal' ? 'selected' : '' }}>
+                            Semifinal
+                        </option>
+                        <option value="Final" {{ old('round') == 'Final' ? 'selected' : '' }}>
+                            Final
                         </option>
                     </select>
                     @error('round')

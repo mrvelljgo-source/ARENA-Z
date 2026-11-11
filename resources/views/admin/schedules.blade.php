@@ -79,28 +79,117 @@
             margin-bottom: 20px;
         }
 
-        .add-button {
-            display: inline-block;
-            background: #3685ff;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 25px;
-        }
-
         .schedule-actions {
             display: flex;
             flex-wrap: wrap;
-            align-items: center;
-            gap: 12px;
+            align-items: stretch;
+            justify-content: space-between;
+            gap: 18px;
             margin-bottom: 25px;
         }
 
-        .schedule-actions .add-button {
-            margin-bottom: 0;
+        .generate-form {
+            flex: 1;
+            min-width: 290px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 16px;
+            background: #101a2d;
+            border: 1px solid #263653;
+            border-radius: 10px;
+        }
+
+        .generate-form p {
+            flex: 1 1 100%;
+            color: #91a0b8;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .replace-option {
+            flex: 1 1 100%;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            color: #fca5a5;
+            font-size: 10px;
+            line-height: 1.6;
+        }
+
+        .replace-option input {
+            margin-top: 2px;
+        }
+
+        .generate-form select {
+            flex: 1;
+            min-width: 210px;
+            padding: 11px;
+            background: #070b16;
+            border: 1px solid #334563;
+            border-radius: 7px;
+            color: white;
+            font: inherit;
+            font-size: 12px;
+        }
+
+        .generate-button {
+            background: #3685ff;
+            color: white;
+            border: 0;
+            padding: 12px 18px;
+            border-radius: 7px;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .no-tournament {
+            flex: 1;
+            min-width: 290px;
+            padding: 16px;
+            background: #101a2d;
+            border: 1px solid #263653;
+            border-radius: 10px;
+            color: #91a0b8;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        .schedule-form {
+            display: grid;
+            gap: 6px;
+            min-width: 155px;
+        }
+
+        .schedule-form input {
+            min-width: 0;
+            padding: 7px;
+            background: #070b16;
+            border: 1px solid #334766;
+            border-radius: 6px;
+            color: white;
+            font: inherit;
+            font-size: 10px;
+        }
+
+        .schedule-form button {
+            background: #2563eb;
+            color: white;
+            border: 0;
+            padding: 7px;
+            border-radius: 6px;
+            font: inherit;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .bracket-generated {
+            color: #91a0b8;
+            font-size: 10px;
         }
 
         .reset-button {
@@ -260,9 +349,46 @@
     @endif
 
     <div class="schedule-actions">
-        <a href="{{ url('/admin/schedules/create') }}" class="add-button">
-            + Tambah Jadwal Pertandingan
-        </a>
+        @php
+            $eligibleTournaments = $tournaments->filter(
+                fn ($tournament) => $tournament->approved_teams_count >= 2
+            );
+        @endphp
+
+        @if ($eligibleTournaments->isNotEmpty())
+            <form class="generate-form"
+                action="{{ url('/admin/schedules/generate') }}"
+                method="POST"
+                onsubmit="return confirm('Buat bracket otomatis? Jika jadwal turnamen ini sudah ada, semua jadwal dan hasil lamanya akan diganti.')">
+                @csrf
+                <p>
+                    Bracket single elimination dibuat dari tim yang sudah disetujui.
+                    Tim yang kalah langsung gugur, pemenang otomatis maju ke babak berikutnya.
+                    Atur tanggal dan waktu pertandingan di tabel ini.
+                </p>
+                <select name="tournament_id" required>
+                    <option value="">-- Pilih turnamen --</option>
+                    @foreach ($eligibleTournaments as $tournament)
+                        <option value="{{ $tournament->id }}">
+                            {{ $tournament->name }} ({{ $tournament->approved_teams_count }} tim
+                            @if ($tournament->match_schedules_count > 0)
+                                · {{ $tournament->match_schedules_count }} jadwal akan diganti
+                            @endif
+                            )
+                        </option>
+                    @endforeach
+                </select>
+                <label class="replace-option">
+                    <input type="checkbox" name="replace_existing" value="1">
+                    Saya paham jadwal dan hasil turnamen yang dipilih akan dihapus jika bracket lama diganti.
+                </label>
+                <button type="submit" class="generate-button">Buat Bracket Single Elimination</button>
+            </form>
+        @else
+            <div class="no-tournament">
+                Belum ada turnamen yang siap dibuat bracket. Pastikan minimal 2 tim sudah disetujui admin.
+            </div>
+        @endif
 
         @if ($schedules->isNotEmpty())
             <form action="{{ url('/admin/schedules/reset') }}"
@@ -288,6 +414,7 @@
                     <th>Babak</th>
                     <th>Tanggal</th>
                     <th>Waktu</th>
+                    <th>Atur Jadwal</th>
                     <th>Hasil</th>
                     <th>Status</th>
                     <th>Aksi</th>
@@ -299,8 +426,8 @@
                     <tr>
                         <td>{{ $index + 1 }}</td>
                         <td>{{ $schedule->tournament->name ?? '-' }}</td>
-                        <td>{{ $schedule->teamA->team_name ?? '-' }}</td>
-                        <td>{{ $schedule->teamB->team_name ?? '-' }}</td>
+                        <td>{{ $schedule->teamA->team_name ?? ($schedule->result === 'BYE' ? 'BYE' : ($schedule->result === 'SKIPPED' ? 'Tidak dimainkan' : 'Menunggu tim')) }}</td>
+                        <td>{{ $schedule->teamB->team_name ?? ($schedule->result === 'BYE' ? 'BYE' : ($schedule->result === 'SKIPPED' ? 'Tidak dimainkan' : 'Menunggu tim')) }}</td>
                         <td>{{ $schedule->round }}</td>
 
                         <td>
@@ -316,26 +443,54 @@
                         </td>
 
                         <td>
-                            {{ $schedule->result ?? 'Belum ada hasil' }}
+                            @if (in_array($schedule->result, ['BYE', 'SKIPPED'], true))
+                                <span class="bracket-generated">
+                                    {{ $schedule->result === 'BYE' ? 'Lolos otomatis' : 'Tidak diperlukan' }}
+                                </span>
+                            @else
+                                <form class="schedule-form"
+                                    action="{{ url('/admin/schedules/'.$schedule->id.'/schedule') }}"
+                                    method="POST">
+                                    @csrf
+                                    <input type="date" name="match_date"
+                                        value="{{ $schedule->match_date }}">
+                                    <input type="time" name="match_time"
+                                        value="{{ $schedule->match_time ? substr($schedule->match_time, 0, 5) : '' }}">
+                                    <button type="submit">Simpan Jadwal</button>
+                                </form>
+                            @endif
+                        </td>
 
-                            <form class="result-form"
-                                action="{{ url('/admin/schedules/'.$schedule->id.'/result') }}"
-                                method="POST">
-                                @csrf
+                        <td>
+                            {{ $schedule->result && ! in_array($schedule->result, ['BYE', 'SKIPPED'], true)
+                                ? $schedule->result
+                                : (in_array($schedule->result, ['BYE', 'SKIPPED'], true)
+                                    ? ($schedule->result === 'BYE' ? 'BYE (auto)' : 'Tidak dimainkan')
+                                    : 'Belum ada hasil') }}
 
-                                <input
-                                    type="text"
-                                    name="result"
-                                    placeholder="Contoh: 2-1"
-                                    value="{{ $schedule->result }}"
-                                    required
-                                    maxlength="30"
-                                >
+                            @if ($schedule->team_a_id && $schedule->team_b_id)
+                                <form class="result-form"
+                                    action="{{ url('/admin/schedules/'.$schedule->id.'/result') }}"
+                                    method="POST">
+                                    @csrf
 
-                                <button type="submit" class="btn-result">
-                                    Simpan
-                                </button>
-                            </form>
+                                    <input
+                                        type="text"
+                                        name="result"
+                                        placeholder="Contoh: 2-1"
+                                        value="{{ $schedule->result === 'BYE' ? '' : $schedule->result }}"
+                                        required
+                                        pattern="[0-9]+-[0-9]+"
+                                        title="Masukkan skor seperti 2-1"
+                                    >
+
+                                    <button type="submit" class="btn-result">
+                                        Simpan
+                                    </button>
+                                </form>
+                            @else
+                                <span class="bracket-generated">Menunggu kedua tim ditentukan</span>
+                            @endif
                         </td>
 
                         <td>
@@ -372,20 +527,24 @@
                                     </form>
                                 @endif
 
-                                <form action="{{ url('/admin/schedules/'.$schedule->id) }}"
-                                    method="POST"
-                                    onsubmit="return confirm('Yakin ingin menghapus jadwal ini?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn-delete">Hapus</button>
-                                </form>
+                                @if ($schedule->is_bracket_generated)
+                                    <span class="bracket-generated">Bagian dari bracket</span>
+                                @else
+                                    <form action="{{ url('/admin/schedules/'.$schedule->id) }}"
+                                        method="POST"
+                                        onsubmit="return confirm('Yakin ingin menghapus jadwal ini?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn-delete">Hapus</button>
+                                    </form>
+                                @endif
 
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="empty">
+                        <td colspan="11" class="empty">
                             Belum ada jadwal pertandingan.
                         </td>
                     </tr>

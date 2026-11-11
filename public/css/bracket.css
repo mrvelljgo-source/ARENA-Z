@@ -1,0 +1,223 @@
+/* ==========================================================================
+   ARENA Z — Professional Tournament Bracket CSS
+   ========================================================================== */
+
+.bracket-container {
+    width: 100%;
+    overflow-x: auto;
+    padding: 30px 10px 50px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.bracket-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.bracket-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bracket-container::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+.bracket-tree {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 0;
+    min-width: 900px;
+    margin: 0 auto;
+}
+
+/* Round column — with connector lines via pseudo-elements */
+.bracket-round {
+    flex: 1;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding: 0 20px;
+}
+
+/* Horizontal connector going right from each round */
+.bracket-round.has-next-round .round-matches .bracket-match::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    width: 20px;
+    height: 1px;
+    background: var(--border-color);
+    z-index: 1;
+}
+
+/* Vertical connector between pairs of matches (connecting to next round) */
+.bracket-round.has-next-round .round-matches .bracket-match:nth-child(odd)::before {
+    content: '';
+    position: absolute;
+    right: -21px;
+    top: 50%;
+    width: 1px;
+    background: var(--border-color);
+    /* Height spans to the sibling — set via JS or use percentage approximation */
+    height: 100%;
+    z-index: 1;
+}
+
+.round-header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 2;
+}
+
+.round-title {
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--blue-primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.round-matches {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    flex-grow: 1;
+    gap: 24px;
+}
+
+/* Wrapper for each match to position connectors */
+.bracket-match {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: visible;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    position: relative;
+    transition: var(--transition);
+}
+
+.bracket-match:hover {
+    border-color: var(--blue-primary);
+    transform: translateY(-2px);
+}
+
+.match-header-bar {
+    background: rgba(8, 13, 25, 0.6);
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(37, 51, 74, 0.5);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.match-team-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(37, 51, 74, 0.35);
+    transition: var(--transition);
+}
+
+.match-team-row:last-child {
+    border-bottom: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.match-team-row.winner {
+    background: rgba(34, 197, 94, 0.08);
+}
+
+.match-team-row.winner .team-name {
+    color: var(--white);
+    font-weight: 700;
+}
+
+.match-team-row.winner .team-score {
+    color: var(--success);
+    font-weight: 800;
+}
+
+.team-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.team-seed {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: var(--font-heading);
+    width: 16px;
+}
+
+.team-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+.team-score {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--white);
+    padding-left: 8px;
+}
+
+.match-tbd {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* Champion Banner Box */
+.bracket-champion-box {
+    margin-top: 40px;
+    background: linear-gradient(135deg, rgba(54, 133, 255, 0.15), rgba(139, 92, 246, 0.15));
+    border: 1px solid var(--blue-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    text-align: center;
+}
+
+.champion-tag {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    color: var(--blue-primary);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.champion-name {
+    font-family: var(--font-heading);
+    font-size: 28px;
+    color: var(--white);
+    margin-bottom: 6px;
+}
+
+.champion-school {
+    color: var(--text-muted);
+    font-size: 15px;
+}
+
